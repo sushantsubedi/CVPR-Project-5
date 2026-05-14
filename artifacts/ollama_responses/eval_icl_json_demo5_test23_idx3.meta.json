@@ -1,0 +1,8 @@
+{
+  "created_at_utc": "2026-05-11T13:56:45+00:00",
+  "url": "http://127.0.0.1:11434",
+  "model": "gemma4:26b",
+  "status_code": 200,
+  "elapsed_s": 62.619163036346436,
+  "response_path": "artifacts/ollama_responses/eval_icl_json_demo5_test23_idx3.json"
+}
