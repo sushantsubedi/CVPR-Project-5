@@ -1,2 +1,1 @@
-"""KAT-style tokenization + ICL tooling for ACT simulation tasks."""
-
+"""KAT-style tokenization and in-context imitation for ACT Transfer Cube (P5)."""

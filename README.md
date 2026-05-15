@@ -1,161 +1,180 @@
-# ACT: Action Chunking with Transformers
+# ACT + Project 5 (KAT-style In-Context Imitation)
 
-### *New*: [ACT tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing)
-TL;DR: if your ACT policy is jerky or pauses in the middle of an episode, just train for longer! Success rate and smoothness can improve way after loss plateaus.
+This repo combines:
 
-#### Project Website: https://tonyzhaozh.github.io/aloha/
+1. **ACT** (Action Chunking with Transformers) — the original sim + training code, unchanged.
+2. **Project 5 (P5)** — a KAT-style in-context imitation pipeline on top, for the **Transfer Cube** task.
 
-This repo contains the implementation of ACT, together with 2 simulated environments:
-Transfer Cube and Bimanual Insertion. You can train and evaluate ACT in sim or real.
-For real, you would also need to install [ALOHA](https://github.com/tonyzhaozh/aloha).
+> P5 pipeline: top RGB-D → DINO anchored keypoints (`KP i x y d`) + quantized 14-D waypoints (`WP[i] L LG R RG`) → Ollama few-shot ICL with JSON schema → decode + MuJoCo replay → success/reward CSV.
+>
+> **Scope.** P5 Steps 1–5; optional fine-tuning (Step 6) is **not** implemented.
 
-### Updates:
-You can find all scripted/human demo for simulated environments [here](https://drive.google.com/drive/folders/1gPR03v05S1xiInoVJn7G7VJ9pDCnxq9O?usp=share_link).
+---
 
+## How to use this repo
 
-### Repo Structure
-- ``imitate_episodes.py`` Train and Evaluate ACT
-- ``policy.py`` An adaptor for ACT policy
-- ``detr`` Model definitions of ACT, modified from DETR
-- ``sim_env.py`` Mujoco + DM_Control environments with joint space control
-- ``ee_sim_env.py`` Mujoco + DM_Control environments with EE space control
-- ``scripted_policy.py`` Scripted policies for sim environments
-- ``constants.py`` Constants shared across files
-- ``utils.py`` Utils such as data loading and helper functions
-- ``visualize_episodes.py`` Save videos from a .hdf5 dataset
+### 0. Prerequisites
 
-### KAT-ICL milestone (Transfer Cube only)
-This repo now also contains a **KAT-style in-context imitation learning (ICL)** milestone pipeline for **ACT Transfer Cube**.
+* macOS or Linux, **Python ≥ 3.9**
+* [`uv`](https://github.com/astral-sh/uv) (`brew install uv` or `pipx install uv`) — the included `./.venv` is a uv-managed virtual environment
+* A running [Ollama](https://ollama.ai) server with at least one of: `gemma4:26b`, `llama3.2:latest`
+  ```bash
+  ollama serve            # in one terminal
+  ollama pull gemma4:26b
+  ollama pull llama3.2:latest
+  ```
 
-Key idea: serialize **observation tokens** (top-view keypoints) and **action tokens** (quantized bimanual joint+gripper waypoints) as text, prompt a local LLM via **Ollama**, then **decode + replay** predicted actions in simulation.
+### 1. One-time setup
 
-#### Files added for KAT-ICL
-Package: `act_kat/`
-- `episode_schema.py`: HDF5 schema inspector + JSONL reports
-- `episodes.py`: episode id listing and HDF5 frame/env helpers
-- `vision_tokens.py`: top-view keypoint tokens (ViT-DINO via `timm`, optional depth)
-- `action_tokens.py`: 14D action quantization + `ACT_START … ACT_END` formatting
-- `icl.py`: shared ICL prompt/generate/parse/decode/replay logic (JSON-constrained Ollama output)
-- `prompting.py`: few-shot prompt assembly
-- `ollama_client.py`: Ollama `/api/generate` client + artifact logging
-- `replay.py`: sim replay + piecewise-constant waypoint upsampling
+```bash
+# create / refresh the uv venv and install ALL dependencies (ACT sim + KAT-ICL)
+uv venv .venv --python 3.9
+source .venv/bin/activate
+uv pip install -r requirements-kat.txt    # single consolidated requirements file
+cd detr && pip install -e . && cd ..      # ACT model package (editable)
 
-Scripts (used by `kat_icl_transfer_cube_report.ipynb`):
-- `schema_report.py`, `make_ds10_subsets.py`, `tokenize_obs.py`, `tokenize_action.py`
-- `visualize_keypoints.py`, `run_icl.py`, `replay_from_icl_json.py`, `replay_manual_test.py`, `eval_icl_json_folders.py`
+# DINO ViT-S/16 weights (~83 MB, downloads to assets/weights/)
+python3 scripts/download_dino_weights.py
+```
 
-Notebook: `kat_icl_transfer_cube_report.ipynb`
+> Conda alternative: `conda env create -f conda_env.yaml && conda activate aloha` still works for the ACT base code. The unified `requirements-kat.txt` is recommended for P5.
 
-Artifacts: `artifacts/prompts/*.txt`, `artifacts/responses/*.json`, `replays/`, `results_icl_json*.csv`
+### 2. Collect data once (fixed seed)
 
+```bash
+source .venv/bin/activate
+python3 record_sim_episodes.py \
+  --task_name sim_transfer_cube_scripted \
+  --dataset_dir data/transfer_cube/base \
+  --num_episodes 25 --downsample_rate 10 --seed 0
+python3 scripts/make_subsets.py --base_dir data/transfer_cube/base
+```
 
-### Installation
+This produces `data/transfer_cube/{base, subsets/demos_5, subsets/demos_10, subsets/demos_20, subsets/test_5}`.
 
-    conda create -n aloha python=3.8.10
-    conda activate aloha
-    pip install torchvision
-    pip install torch
-    pip install pyquaternion
-    pip install pyyaml
-    pip install rospkg
-    pip install pexpect
-    pip install mujoco==2.3.7
-    pip install dm_control==1.0.14
-    pip install opencv-python
-    pip install matplotlib
-    pip install einops
-    pip install packaging
-    pip install h5py
-    pip install ipython
-    cd act/detr && pip install -e .
+### 3. Run P5 Step 5 (seen + unseen + ablations + aggregation)
 
-#### KAT-ICL dependencies (if using `.venv`)
-The KAT-ICL milestone code assumes the repo-local venv `./.venv` has the ACT sim deps plus:
-- `requests` (Ollama HTTP calls)
-- `timm` (ViT-DINO backbone for keypoint tokens)
+One command:
 
-If your `record_sim_episodes.py` runs already, you likely only need:
+```bash
+python3 scripts/evaluate.py sweep --collection_seed 0 \
+  --models 'gemma4:26b,llama3.2:latest'
+```
 
-    source .venv/bin/activate
-    python3 -m pip install requests timm
+Output appears under `artifacts/`:
 
-Download DINO ViT weights once (local file, no Hugging Face at inference):
+```
+artifacts/
+├── prompts/<run_id>.txt              full LLM prompt
+├── responses/<run_id>.json           parsed JSON response
+├── replays/<run_id>.mp4              rollout video
+├── results_p5_main_seen_unseen.csv   main seen/unseen on demos_20
+├── results_ablation_ndemos_{5,10,20}_unseen.csv
+├── results_ablation_K{5,10,20}_unseen.csv
+├── results_ablation_M{10,20,40}_unseen.csv
+├── results_ablation_model_{gemma4_26b,llama3_2_latest}_unseen.csv
+├── p5_step5_summary.json             aggregated summary
+└── p5_step5_tables.md                Markdown table for the report
+```
 
-    python3 scripts/download_dino_weights.py
+Or open [`P5_KAT_ICL_Complete.ipynb`](P5_KAT_ICL_Complete.ipynb) and run all cells — it shells out to the same scripts inside the activated venv.
 
-Weights are saved to `assets/weights/vit_small_patch16_224.dino.pth` (override with `ACT_KAT_DINO_CHECKPOINT`).
+### 4. (Optional) Inspect individual pieces
 
-### Example Usages
+```bash
+# Print OBS + ACT tokens for one episode (+ KP overlay PNG)
+python3 scripts/show_tokens.py \
+  --episode_hdf5 data/transfer_cube/subsets/demos_5/episode_0.hdf5 \
+  --K 10 --M 20 --overlay artifacts/keypoints_overlay.png
 
-To set up a new terminal, run:
+# Decode-free upper bound: replay the stored /action arrays
+python3 scripts/gt_replay.py --dataset_dir data/transfer_cube/subsets/test_5
 
-    conda activate aloha
-    cd <path to act repo>
+# Replay a saved LLM response on one test episode
+python3 scripts/replay_response.py \
+  --response artifacts/responses/<run_id>.json \
+  --test_episode_hdf5 data/transfer_cube/subsets/test_5/episode_20.hdf5 \
+  --demos_dir data/transfer_cube/subsets/demos_5 --M 20
 
-### Simulated experiments
+# Aggregate results CSVs only (no LLM calls)
+python3 scripts/evaluate.py aggregate --glob 'artifacts/results_*.csv'
+```
 
-We use ``sim_transfer_cube_scripted`` task in the examples below. Another option is ``sim_insertion_scripted``.
-To generated 50 episodes of scripted data, run:
+> **uv tip:** instead of `source .venv/bin/activate && python3 …` you can prefix every command with `uv run --python .venv/bin/python3 …`; it will pick up the same interpreter.
 
-    python3 record_sim_episodes.py \
-    --task_name sim_transfer_cube_scripted \
-    --dataset_dir <data save dir> \
-    --num_episodes 50
+---
 
-To can add the flag ``--onscreen_render`` to see real-time rendering.
-To visualize the episode after it is collected, run
+## Repo layout (P5 parts)
 
-    python3 visualize_episodes.py --dataset_dir <data save dir> --episode_idx 0
+```
+act_kat/                          KAT library (8 modules)
+├── episodes.py                   HDF5 helpers
+├── vision_tokens.py              DINO ViT-S/16 + FPS + patch->pixel
+├── keypoint_anchors.py           paper-style anchored keypoints + tokenization
+├── action_tokens.py              14-D action quantizer + TRAJ/WP formatter
+├── ollama_client.py              Ollama HTTP + artifact logging
+├── replay.py                     sim replay + linear/hold upsampling
+└── icl.py                        prompt build / generate / parse / replay
 
-### KAT-ICL milestone quickstart (Transfer Cube)
-Run the notebook:
-- Open `kat_icl_transfer_cube_report.ipynb` and execute top-to-bottom.
+scripts/                          6 CLI entry points
+├── download_dino_weights.py
+├── make_subsets.py
+├── show_tokens.py
+├── replay_response.py
+├── gt_replay.py
+└── evaluate.py                   Step 5 entry: run / sweep / aggregate
 
-Or run key steps as scripts:
+reports/P5_KAT_ICL_Report.md      full write-up
+P5_KAT_ICL_Complete.ipynb         single runnable notebook
+data/transfer_cube/DATA_MANIFEST.md   dataset & split contract
+requirements-kat.txt              unified deps (ACT sim + KAT-ICL)
+```
 
-1) Collect + visualize demos (downsample 10):
+---
 
-    python3 record_sim_episodes.py --task_name sim_transfer_cube_scripted --dataset_dir data/transfer_cube/ds10/demos_2_env0 --num_episodes 2 --downsample_rate 10
-    python3 visualize_episodes.py --dataset_dir data/transfer_cube/ds10/demos_2_env0 --episode_idx 0
+## Seen vs. unseen (P5 Step 5 requirement)
 
-2) Monitor episode file structure (schema report):
+* `subsets/demos_{5,10,20}` hold episodes **0..N-1** of the seed-0 run — used as in-context demonstrations.
+* `subsets/test_5` holds episodes **20..24** — **never present** in any demo folder.
+* `scripts/evaluate.py` tags every result row with `split ∈ {seen, unseen}`:
+  * **seen** = leave-one-out within the demo folder (query is one demo, prompt has the other N-1).
+  * **unseen** = queries are episodes 20..24 with fresh box poses from the same seeded run.
 
-    python3 scripts/schema_report.py --dataset_dir data/transfer_cube/ds10/demos_2_env0 --out artifacts/schema_report_ds10_env0.jsonl
+## Ablations covered
 
-3) Tokenize obs + actions:
+| Ablation | Values | Holds fixed |
+|----------|--------|-------------|
+| #demos | demos_5 / demos_10 / demos_20 | K=10, M=20, model=gemma4:26b, unseen |
+| K keypoints | 5 / 10 / 20 | demos_5, M=20, model=gemma4:26b, unseen |
+| M action tokens | 10 / 20 / 40 | demos_5, K=10, model=gemma4:26b, unseen |
+| LLM | `gemma4:26b` vs `llama3.2:latest` | demos_5, K=10, M=20, unseen |
 
-    python3 scripts/tokenize_obs.py --episode_hdf5 data/transfer_cube/ds10/demos_2_env0/episode_0.hdf5 --k 10 --device cpu
-    python3 scripts/tokenize_action.py --episode_hdf5 data/transfer_cube/ds10/demos_2_env0/episode_0.hdf5 --M 20
+---
 
-4) Call Ollama (JSON actions; saves `artifacts/prompts/<run_id>.txt` and `artifacts/responses/<run_id>.json`):
+## Original ACT (training, evaluation)
 
-    python3 scripts/run_icl.py --dataset_dir data/transfer_cube/ds10/demos_2_env0 --demo_ids 0 --query_id 1 --K 10 --M 20 --model gemma4:26b --run_id my_run
+`imitate_episodes.py` and friends are untouched and still work as in the upstream repo:
 
-5) Decode + replay from ICL JSON:
+```bash
+# Train ACT on transfer cube
+python3 imitate_episodes.py \
+  --task_name sim_transfer_cube_scripted \
+  --ckpt_dir <ckpt dir> \
+  --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 \
+  --batch_size 8 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0
 
-    python3 scripts/replay_from_icl_json.py --icl_json artifacts/responses/my_run.json --quantizer_json artifacts/quantizers/<quantizer>.json --bins 64 --episode_len 400 --box_pose_episode_hdf5 data/transfer_cube/subsets/test_5/episode_21.hdf5
+# Evaluate (same command + --eval)
+python3 imitate_episodes.py --task_name sim_transfer_cube_scripted \
+  --ckpt_dir <ckpt dir> --policy_class ACT --eval
+```
 
-6) Manual LLM response on one test episode (paste JSON or use a file; video under `artifacts/replays/`):
+Typical success after full training: ~90% on transfer cube, ~50% on insertion. See [ACT tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing).
 
-    python3 scripts/replay_manual_test.py --tests_dir data/transfer_cube/ds10/subsets_depth/test_5 --test_id 20 --demos_dir data/transfer_cube/ds10/subsets_depth/demos_5 --llm_json path/to/response.json
-
-To train ACT:
-    
-    # Transfer Cube task
-    python3 imitate_episodes.py \
-    --task_name sim_transfer_cube_scripted \
-    --ckpt_dir <ckpt dir> \
-    --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 8 --dim_feedforward 3200 \
-    --num_epochs 2000  --lr 1e-5 \
-    --seed 0
-
-
-To evaluate the policy, run the same command but add ``--eval``. This loads the best validation checkpoint.
-The success rate should be around 90% for transfer cube, and around 50% for insertion.
-To enable temporal ensembling, add flag ``--temporal_agg``.
-Videos will be saved to ``<ckpt_dir>`` for each rollout.
-You can also add ``--onscreen_render`` to see real-time rendering during evaluation.
-
-For real-world data where things can be harder to model, train for at least 5000 epochs or 3-4 times the length after the loss has plateaued.
-Please refer to [tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing) for more info.
-
+### ACT base files
+- `imitate_episodes.py` — train + evaluate ACT
+- `policy.py` — ACT policy adaptor
+- `detr/` — model definitions (modified DETR)
+- `sim_env.py`, `ee_sim_env.py` — MuJoCo + DM_Control envs
+- `scripted_policy.py` — scripted oracle policies
+- `record_sim_episodes.py`, `visualize_episodes.py`
+- `constants.py`, `utils.py`

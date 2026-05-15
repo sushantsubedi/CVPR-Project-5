@@ -46,6 +46,9 @@ def main(args):
     else:
         raise NotImplementedError
 
+    collection_seed = int(args.get('seed', 0))
+    np.random.seed(collection_seed)
+
     success = []
     for episode_idx in range(num_episodes):
         print(f'{episode_idx=}')
@@ -172,6 +175,8 @@ def main(args):
         with h5py.File(dataset_path + '.hdf5', 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
             root.attrs['sim'] = True
             root.attrs['downsample_rate'] = downsample_rate
+            root.attrs['collection_seed'] = collection_seed
+            root.attrs['episode_index'] = int(episode_idx)
             # Save initial environment state for reproducible replay (e.g., box pose at t=0).
             root.attrs['env_state0'] = subtask_info
             obs = root.create_group('observations')
@@ -203,6 +208,10 @@ if __name__ == '__main__':
     parser.add_argument('--downsample_rate', action='store', type=int, default=1,
                         help='save every Nth timestep into the dataset')
     parser.add_argument('--onscreen_render', action='store_true')
-    
+    parser.add_argument(
+        '--seed', action='store', type=int, default=0,
+        help='RNG seed for box pose randomization (fixed for reproducible P5 splits)',
+    )
+
     main(vars(parser.parse_args()))
 

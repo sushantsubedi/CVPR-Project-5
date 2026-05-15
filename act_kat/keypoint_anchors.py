@@ -17,7 +17,6 @@ import torch
 
 from act_kat.vision_tokens import (
     Keypoint2D,
-    Keypoint2DDepth,
     _quantize_01,
     extract_patch_descriptors_dinov2,
     farthest_point_sampling_cosine,
