@@ -16,6 +16,8 @@ fuse.cfg
 # Generation results
 results/
 data/
+artifacts/
+assets/weights/*.pth
 ray/auth.json
 
 # Byte-compiled / optimized / DLL files

@@ -133,10 +133,9 @@ def load_data(dataset_dir, num_episodes, camera_names, batch_size_train, batch_s
 def sample_box_pose():
     # Wider spawn region to increase initial-state variance for Transfer Cube.
     # Keep it conservative so the cube stays on-table and reachable.
-    #x_range = [0.0, 0.2]
-    #y_range = [0.4, 0.6]
-    x_range = [-0.10, 0.25]
-    y_range = [0.30, 0.70]
+    x_range = [0.0, 0.2]
+    y_range = [0.4, 0.6]
+  
     z_range = [0.05, 0.05]
 
     ranges = np.vstack([x_range, y_range, z_range])

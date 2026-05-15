@@ -52,9 +52,7 @@ def upsample_waypoints_piecewise_constant(actions_wp: np.ndarray, T: int) -> np.
 
 
 def upsample_waypoints_linear(actions_wp: np.ndarray, T: int) -> np.ndarray:
-    """
-    Linearly interpolates between M waypoints to produce T actions.
-    """
+    """Linearly interpolate M waypoints to T timesteps."""
     actions_wp = np.asarray(actions_wp, dtype=np.float32)
     if actions_wp.ndim != 2 or actions_wp.shape[1] != 14:
         raise ValueError("actions_wp must be (M,14)")
@@ -70,6 +68,15 @@ def upsample_waypoints_linear(actions_wp: np.ndarray, T: int) -> np.ndarray:
     for d in range(14):
         out[:, d] = np.interp(x, x_wp, actions_wp[:, d])
     return out
+
+
+def upsample_waypoints(actions_wp: np.ndarray, T: int, mode: str = "linear") -> np.ndarray:
+    m = mode.lower()
+    if m in ("linear", "lerp"):
+        return upsample_waypoints_linear(actions_wp, T)
+    if m in ("hold", "piecewise", "constant"):
+        return upsample_waypoints_piecewise_constant(actions_wp, T)
+    raise ValueError(f"unknown upsample mode {mode!r}; use linear or hold")
 
 
 def replay_actions(

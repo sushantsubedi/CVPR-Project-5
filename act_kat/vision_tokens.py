@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
-from typing import List, Tuple
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
 import timm
 import torchvision.transforms as T
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+DINO_CHECKPOINT_PATH = _REPO_ROOT / "assets" / "weights" / "vit_small_patch16_224.dino.pth"
+# Official DINO checkpoint (Meta CDN) — same weights timm uses for vit_small_patch16_224.dino
+DINO_WEIGHTS_URL = (
+    "https://dl.fbaipublicfiles.com/dino/dino_deitsmall16_pretrain/dino_deitsmall16_pretrain.pth"
+)
+DINO_MODEL_NAME = "vit_small_patch16_224.dino"
+
+_MODEL_CACHE: Dict[str, torch.nn.Module] = {}
 
 
 @dataclass(frozen=True)
@@ -51,17 +63,38 @@ def _make_preprocess(image_size: int = 224) -> T.Compose:
     )
 
 
-def _load_dinov2_vits14(device: torch.device) -> torch.nn.Module:
-    # NOTE: Kept for potential future use (requires Python >=3.10 with current dinov2 repo).
-    raise RuntimeError("dinov2 torch.hub model requires Python>=3.10 in practice; use timm DINO instead.")
+def dino_checkpoint_path() -> Path:
+    override = os.environ.get("ACT_KAT_DINO_CHECKPOINT")
+    return Path(override) if override else DINO_CHECKPOINT_PATH
 
 
 def _load_dino_vit_small_patch16(device: torch.device) -> torch.nn.Module:
-    # timm provides a DINO-pretrained ViT that is compatible with Python 3.9.
-    # This downloads weights on first run.
-    model = timm.create_model("vit_small_patch16_224.dino", pretrained=True, num_classes=0)
+    """Load ViT-S/16 DINO from local weights only (no Hugging Face / network at inference)."""
+    cache_key = str(device)
+    if cache_key in _MODEL_CACHE:
+        return _MODEL_CACHE[cache_key]
+
+    ckpt = dino_checkpoint_path()
+    if not ckpt.is_file():
+        raise FileNotFoundError(
+            f"DINO ViT weights not found at {ckpt}.\n"
+            "Download once (Meta CDN, ~83MB):\n"
+            "  python3 scripts/download_dino_weights.py"
+        )
+
+    model = timm.create_model(DINO_MODEL_NAME, pretrained=False, num_classes=0)
+    try:
+        state = torch.load(ckpt, map_location="cpu", weights_only=True)
+    except TypeError:
+        state = torch.load(ckpt, map_location="cpu")
+    if isinstance(state, dict) and "state_dict" in state:
+        state = state["state_dict"]
+    elif isinstance(state, dict) and "model" in state:
+        state = state["model"]
+    model.load_state_dict(state, strict=True)
     model.eval()
     model.to(device)
+    _MODEL_CACHE[cache_key] = model
     return model
 
 

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
@@ -78,6 +76,7 @@ def action_tokens_from_episode(
     quantizer: ActionQuantizer,
     M: int,
     gripper_threshold: float = 0.5,
+    token_format: str = "scene",
 ) -> Tuple[np.ndarray, str]:
     """
     Returns:
@@ -96,75 +95,21 @@ def action_tokens_from_episode(
     lg = (a_wp[:, 6] >= gripper_threshold).astype(np.int32)
     rg = (a_wp[:, 13] >= gripper_threshold).astype(np.int32)
 
-    lines = ["ACT_START"]
-    for i in range(M):
-        left = q[i, :6].tolist()
-        right = q[i, 7:13].tolist()
-        lines.append(f"A i={i} L={json.dumps(left)} LG={int(lg[i])} R={json.dumps(right)} RG={int(rg[i])}")
-    lines.append("ACT_END")
-    return q, "\n".join(lines) + "\n"
+    if token_format == "legacy":
+        import json
 
+        lines = ["ACT_START"]
+        for i in range(M):
+            left = q[i, :6].tolist()
+            right = q[i, 7:13].tolist()
+            lines.append(
+                f"A i={i} L={json.dumps(left)} LG={int(lg[i])} "
+                f"R={json.dumps(right)} RG={int(rg[i])}"
+            )
+        lines.append("ACT_END")
+        return q, "\n".join(lines) + "\n"
 
-_LINE_RE = re.compile(
-    r"^A\s+i=(?P<i>\d+)\s+L=(?P<L>\[[0-9,\s]+\])\s+LG=(?P<LG>[01])\s+R=(?P<R>\[[0-9,\s]+\])\s+RG=(?P<RG>[01])\s*$"
-)
+    from act_kat.scene_tokens import format_action_trajectory
 
-
-def parse_action_block(text: str, M_expected: Optional[int] = None) -> Tuple[Optional[np.ndarray], List[str]]:
-    """
-    Parses ACT block into integer codes (M,14).
-    Returns (codes_or_none, errors).
-    """
-    errors: List[str] = []
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    if "ACT_START" not in lines or "ACT_END" not in lines:
-        errors.append("missing_ACT_START_or_END")
-        return None, errors
-    try:
-        start = lines.index("ACT_START")
-        end = lines.index("ACT_END")
-    except ValueError:
-        errors.append("bad_ACT_markers")
-        return None, errors
-    body = lines[start + 1 : end]
-    if len(body) == 0:
-        errors.append("empty_ACT_body")
-        return None, errors
-
-    parsed: Dict[int, Tuple[List[int], int, List[int], int]] = {}
-    for ln in body:
-        m = _LINE_RE.match(ln)
-        if not m:
-            errors.append(f"unparsed_line:{ln[:80]}")
-            continue
-        i = int(m.group("i"))
-        try:
-            L = json.loads(m.group("L"))
-            R = json.loads(m.group("R"))
-        except Exception:
-            errors.append(f"bad_json:{i}")
-            continue
-        if not (isinstance(L, list) and len(L) == 6 and isinstance(R, list) and len(R) == 6):
-            errors.append(f"bad_lengths:{i}")
-            continue
-        LG = int(m.group("LG"))
-        RG = int(m.group("RG"))
-        parsed[i] = ([int(x) for x in L], LG, [int(x) for x in R], RG)
-
-    if len(parsed) == 0:
-        errors.append("no_valid_lines")
-        return None, errors
-
-    M = max(parsed.keys()) + 1
-    if M_expected is not None and M != M_expected:
-        errors.append(f"M_mismatch:got={M},expected={M_expected}")
-
-    q = np.zeros((M, 14), dtype=np.int32)
-    for i, (L, LG, R, RG) in parsed.items():
-        q[i, :6] = np.asarray(L, dtype=np.int32)
-        # store gripper bits in dims 6 and 13; caller can map to bin extremes if desired
-        q[i, 6] = int(LG)
-        q[i, 7:13] = np.asarray(R, dtype=np.int32)
-        q[i, 13] = int(RG)
-    return q, errors
+    return q, format_action_trajectory(q, lg=lg, rg=rg)
 

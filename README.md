@@ -29,49 +29,24 @@ This repo now also contains a **KAT-style in-context imitation learning (ICL)** 
 
 Key idea: serialize **observation tokens** (top-view keypoints) and **action tokens** (quantized bimanual joint+gripper waypoints) as text, prompt a local LLM via **Ollama**, then **decode + replay** predicted actions in simulation.
 
-#### What “echo_gt” means (important)
-Some scripts support a `--mode echo_gt` option:
-- **`echo_gt`** = “echo ground truth”: the LLM is asked to repeat the *provided* action-token block exactly.
-- This is **only a plumbing/sanity check** (prompt logging + parsing + decoding + replay).
-- For a real KAT-ICL run, you want the LLM to **generate** action tokens from the query observation (see `--mode icl` in `scripts/run_icl.py`).
-
 #### Files added for KAT-ICL
 Package: `act_kat/`
-- `act_kat/__init__.py`: package marker
-- `act_kat/episode_schema.py`: HDF5 schema inspector (“monitor structure of each episode file”) and JSONL reporting helpers
-- `act_kat/vision_tokens.py`: observation tokenization
-  - extracts ViT patch descriptors (ViT-DINO via `timm`) from the `top` camera image
-  - selects K keypoints and emits an `OBS_START … OBS_END` token block
-  - includes an optional depth-aware extension (`d=`) if/when depth is recorded later
-- `act_kat/action_tokens.py`: action tokenization + decoding utilities
-  - per-dimension uniform quantizer for 14D actions
-  - waypoint selection (M tokens) and `ACT_START … ACT_END` formatting
-  - robust parser for generated token blocks
-- `act_kat/prompting.py`: prompt text assembly and strict formatting instructions
-- `act_kat/ollama_client.py`: Ollama HTTP client + persistent logging to `artifacts/`
-  - saves prompt text, request json, and raw response json per run_id
-- `act_kat/replay.py`: decode → upsample → replay in `make_sim_env()` and compute success (reward==4), plus video saving
+- `episode_schema.py`: HDF5 schema inspector + JSONL reports
+- `episodes.py`: episode id listing and HDF5 frame/env helpers
+- `vision_tokens.py`: top-view keypoint tokens (ViT-DINO via `timm`, optional depth)
+- `action_tokens.py`: 14D action quantization + `ACT_START … ACT_END` formatting
+- `icl.py`: shared ICL prompt/generate/parse/decode/replay logic (JSON-constrained Ollama output)
+- `prompting.py`: few-shot prompt assembly
+- `ollama_client.py`: Ollama `/api/generate` client + artifact logging
+- `replay.py`: sim replay + piecewise-constant waypoint upsampling
 
-Scripts: `scripts/`
-- `scripts/schema_report.py`: CLI wrapper that writes JSONL schema reports for all `episode_*.hdf5` in a dataset dir
-- `scripts/tokenize_obs.py`: prints observation keypoint tokens for one HDF5 episode (K configurable)
-- `scripts/tokenize_action.py`: prints action waypoint tokens for one HDF5 episode (M configurable)
-- `scripts/run_icl.py`: main driver to build few-shot prompts, call Ollama, and log outputs
-  - `--mode icl`: intended real ICL generation path
-  - `--mode echo_gt`: sanity path (LLM repeats ground-truth ACT block)
-- `scripts/replay_from_ollama.py`: parses an Ollama response → decodes actions → replays sim → saves a replay video
-- `scripts/eval_echo_gt.py`: evaluation harness (currently echo-gt mode) that writes `artifacts/results.csv`
+Scripts (used by `kat_icl_transfer_cube_report.ipynb`):
+- `schema_report.py`, `make_ds10_subsets.py`, `tokenize_obs.py`, `tokenize_action.py`
+- `visualize_keypoints.py`, `run_icl.py`, `replay_from_icl_json.py`, `replay_manual_test.py`, `eval_icl_json_folders.py`
 
-Notebook:
-- `kat_icl_transfer_cube_report.ipynb`: executable “report notebook” that runs the full milestone pipeline end-to-end
+Notebook: `kat_icl_transfer_cube_report.ipynb`
 
-Artifacts/directories (generated):
-- `data/transfer_cube/...`: recorded episodes (HDF5) + rendered videos/plots
-- `artifacts/schema_report_*.jsonl`: per-episode schema reports
-- `artifacts/prompts/`, `artifacts/ollama_requests/`, `artifacts/ollama_responses/`: prompt + Ollama request/response logs
-- `artifacts/parsed_actions/`: decoded actions and parse diagnostics (npz)
-- `artifacts/replays/`: replay rollout videos
-- `artifacts/results.csv`: evaluation results CSV
+Artifacts: `artifacts/prompts/*.txt`, `artifacts/responses/*.json`, `replays/`, `results_icl_json*.csv`
 
 
 ### Installation
@@ -103,6 +78,12 @@ If your `record_sim_episodes.py` runs already, you likely only need:
 
     source .venv/bin/activate
     python3 -m pip install requests timm
+
+Download DINO ViT weights once (local file, no Hugging Face at inference):
+
+    python3 scripts/download_dino_weights.py
+
+Weights are saved to `assets/weights/vit_small_patch16_224.dino.pth` (override with `ACT_KAT_DINO_CHECKPOINT`).
 
 ### Example Usages
 
@@ -146,13 +127,17 @@ Or run key steps as scripts:
     python3 scripts/tokenize_obs.py --episode_hdf5 data/transfer_cube/ds10/demos_2_env0/episode_0.hdf5 --k 10 --device cpu
     python3 scripts/tokenize_action.py --episode_hdf5 data/transfer_cube/ds10/demos_2_env0/episode_0.hdf5 --M 20
 
-4) Call Ollama (logs prompt + response):
+4) Call Ollama (JSON actions; saves `artifacts/prompts/<run_id>.txt` and `artifacts/responses/<run_id>.json`):
 
-    python3 scripts/run_icl.py --dataset_dir data/transfer_cube/ds10/demos_2_env0 --demo_ids 0 --query_id 1 --K 10 --M 20 --model gemma4:26b --ollama_url http://127.0.0.1:11434 --device cpu --run_id my_run --mode icl
+    python3 scripts/run_icl.py --dataset_dir data/transfer_cube/ds10/demos_2_env0 --demo_ids 0 --query_id 1 --K 10 --M 20 --model gemma4:26b --run_id my_run
 
-5) Decode + replay from a logged Ollama response:
+5) Decode + replay from ICL JSON:
 
-    python3 scripts/replay_from_ollama.py --ollama_response_json artifacts/ollama_responses/<run_id>.json --quantizer_json artifacts/quantizers/<quantizer>.json --bins 64 --M 20 --episode_len 400 --video_path artifacts/replays/<run_id>.mp4 --box_pose_episode_hdf5 data/transfer_cube/ds10/demos_2_env0/episode_1.hdf5
+    python3 scripts/replay_from_icl_json.py --icl_json artifacts/responses/my_run.json --quantizer_json artifacts/quantizers/<quantizer>.json --bins 64 --episode_len 400 --box_pose_episode_hdf5 data/transfer_cube/subsets/test_5/episode_21.hdf5
+
+6) Manual LLM response on one test episode (paste JSON or use a file; video under `artifacts/replays/`):
+
+    python3 scripts/replay_manual_test.py --tests_dir data/transfer_cube/ds10/subsets_depth/test_5 --test_id 20 --demos_dir data/transfer_cube/ds10/subsets_depth/demos_5 --llm_json path/to/response.json
 
 To train ACT:
     
