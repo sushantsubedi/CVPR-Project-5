@@ -107,7 +107,7 @@ def replay_actions(
     if save_video:
         h, w, _ = ts.observation["images"][render_cam].shape
         out = cv2.VideoWriter(
-            video_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h)
+            video_path, cv2.VideoWriter_fourcc(*"avc1"), fps, (w, h)
         )
 
     episode = [ts]

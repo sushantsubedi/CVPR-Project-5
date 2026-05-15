@@ -1,0 +1,18 @@
+{
+  "demos_dir": "/Users/sushantsubedi/Documents/act/data/transfer_cube/subsets/demos_5",
+  "tests_dir": "/Users/sushantsubedi/Documents/act/data/transfer_cube/subsets/test_5",
+  "eval_split": "unseen",
+  "model": "gemma4:26b",
+  "collection_seed": 0,
+  "K_keypoints": 10,
+  "M_actions": 20,
+  "bins": 32,
+  "obs_bins": 16,
+  "n_queries": 5,
+  "success_rate_all": 0.0,
+  "success_rate_seen": null,
+  "success_rate_unseen": 0.0,
+  "parse_error_rate": 0.0,
+  "avg_gen_time_s": 81.84369277954102,
+  "out_csv": "artifacts/results_ablation_M20_unseen.csv"
+}

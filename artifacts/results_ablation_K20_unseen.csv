@@ -1,0 +1,6 @@
+split,episode_id,model,K,M,n_demos_in_prompt,demo_ids_in_prompt,success,max_reward,parse_ok,parse_errors
+unseen,20,gemma4:26b,20,20,5,"[0, 1, 2, 3, 4]",0,0.0,1,[]
+unseen,21,gemma4:26b,20,20,5,"[0, 1, 2, 3, 4]",0,0.0,1,[]
+unseen,22,gemma4:26b,20,20,5,"[0, 1, 2, 3, 4]",0,0.0,1,[]
+unseen,23,gemma4:26b,20,20,5,"[0, 1, 2, 3, 4]",0,0.0,1,[]
+unseen,24,gemma4:26b,20,20,5,"[0, 1, 2, 3, 4]",0,0.0,1,[]

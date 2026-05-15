@@ -1,0 +1,6 @@
+episode_id,downsample_rate,success,max_reward,steps
+0,10,1,4.0,400
+1,10,1,4.0,400
+2,10,1,4.0,400
+3,10,1,4.0,400
+4,10,1,4.0,400

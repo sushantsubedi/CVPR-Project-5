@@ -1,0 +1,124 @@
+{
+  "files": [
+    {
+      "path": "artifacts/results_ablation_K10_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_K20_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_K5_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_M10_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_M20_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_M40_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 0.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_model_gemma4_26b_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_model_llama3_2_latest_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_ndemos_10_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_ablation_ndemos_20_unseen.csv",
+      "n": 5,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_gt_replay_demos_5.csv",
+      "n": 5,
+      "parse_ok_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "path": "artifacts/results_gt_replay_test_5.csv",
+      "n": 5,
+      "parse_ok_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "path": "artifacts/results_main_seen_unseen.csv",
+      "n": 10,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": 0.0,
+      "success_rate_unseen": 0.0,
+      "n_seen": 5,
+      "n_unseen": 5
+    },
+    {
+      "path": "artifacts/results_smoke_unseen.csv",
+      "n": 1,
+      "parse_ok_rate": 1.0,
+      "success_rate_seen": NaN,
+      "success_rate_unseen": 0.0,
+      "n_seen": 0,
+      "n_unseen": 1
+    }
+  ]
+}

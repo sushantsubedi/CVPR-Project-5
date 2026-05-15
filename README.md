@@ -1,13 +1,12 @@
-# ACT + Project 5 (KAT-style In-Context Imitation)
+# ACT + KAT-style In-Context Imitation (Transfer Cube)
 
 This repo combines:
 
 1. **ACT** (Action Chunking with Transformers) — the original sim + training code, unchanged.
-2. **Project 5 (P5)** — a KAT-style in-context imitation pipeline on top, for the **Transfer Cube** task.
+2. **KAT-ICL pipeline** — added on top, applied to the **Transfer Cube** task only.
 
-> P5 pipeline: top RGB-D → DINO anchored keypoints (`KP i x y d`) + quantized 14-D waypoints (`WP[i] L LG R RG`) → Ollama few-shot ICL with JSON schema → decode + MuJoCo replay → success/reward CSV.
+> Pipeline: top RGB-D → DINO anchored keypoints (`KP i x y d`) + quantized 14-D waypoints (`WP[i] L LG R RG`) → Ollama few-shot ICL with JSON schema → decode + MuJoCo replay → success/reward CSV.
 >
-> **Scope.** P5 Steps 1–5; optional fine-tuning (Step 6) is **not** implemented.
 
 ---
 
@@ -15,8 +14,6 @@ This repo combines:
 
 ### 0. Prerequisites
 
-* macOS or Linux, **Python ≥ 3.9**
-* [`uv`](https://github.com/astral-sh/uv) (`brew install uv` or `pipx install uv`) — the included `./.venv` is a uv-managed virtual environment
 * A running [Ollama](https://ollama.ai) server with at least one of: `gemma4:26b`, `llama3.2:latest`
   ```bash
   ollama serve            # in one terminal
@@ -37,7 +34,6 @@ cd detr && pip install -e . && cd ..      # ACT model package (editable)
 python3 scripts/download_dino_weights.py
 ```
 
-> Conda alternative: `conda env create -f conda_env.yaml && conda activate aloha` still works for the ACT base code. The unified `requirements-kat.txt` is recommended for P5.
 
 ### 2. Collect data once (fixed seed)
 
@@ -52,7 +48,7 @@ python3 scripts/make_subsets.py --base_dir data/transfer_cube/base
 
 This produces `data/transfer_cube/{base, subsets/demos_5, subsets/demos_10, subsets/demos_20, subsets/test_5}`.
 
-### 3. Run P5 Step 5 (seen + unseen + ablations + aggregation)
+### 3. Run Step 5 (seen + unseen + ablations + aggregation)
 
 One command:
 
@@ -68,16 +64,16 @@ artifacts/
 ├── prompts/<run_id>.txt              full LLM prompt
 ├── responses/<run_id>.json           parsed JSON response
 ├── replays/<run_id>.mp4              rollout video
-├── results_p5_main_seen_unseen.csv   main seen/unseen on demos_20
-├── results_ablation_ndemos_{5,10,20}_unseen.csv
+├── results_main_seen_unseen.csv      main seen/unseen on demos_5 (K=10, M=20)
+├── results_ablation_ndemos_{10,20}_unseen.csv
 ├── results_ablation_K{5,10,20}_unseen.csv
 ├── results_ablation_M{10,20,40}_unseen.csv
 ├── results_ablation_model_{gemma4_26b,llama3_2_latest}_unseen.csv
-├── p5_step5_summary.json             aggregated summary
-└── p5_step5_tables.md                Markdown table for the report
+├── evaluation_summary.json           aggregated summary
+└── evaluation_tables.md              Markdown table for the report
 ```
 
-Or open [`P5_KAT_ICL_Complete.ipynb`](P5_KAT_ICL_Complete.ipynb) and run all cells — it shells out to the same scripts inside the activated venv.
+Or open [`KAT_ICL.ipynb`](KAT_ICL.ipynb) and run all cells — it shells out to the same scripts inside the activated venv and shows the sanity-check artifacts (keypoint overlay PNG, gt-replay video, ICL rollout video) inline.
 
 ### 4. (Optional) Inspect individual pieces
 
@@ -100,11 +96,10 @@ python3 scripts/replay_response.py \
 python3 scripts/evaluate.py aggregate --glob 'artifacts/results_*.csv'
 ```
 
-> **uv tip:** instead of `source .venv/bin/activate && python3 …` you can prefix every command with `uv run --python .venv/bin/python3 …`; it will pick up the same interpreter.
 
 ---
 
-## Repo layout (P5 parts)
+## Repo layout
 
 ```
 act_kat/                          KAT library (8 modules)
@@ -122,17 +117,17 @@ scripts/                          6 CLI entry points
 ├── show_tokens.py
 ├── replay_response.py
 ├── gt_replay.py
-└── evaluate.py                   Step 5 entry: run / sweep / aggregate
+└── evaluate.py                   evaluation entry: run / sweep / aggregate
 
-reports/P5_KAT_ICL_Report.md      full write-up
-P5_KAT_ICL_Complete.ipynb         single runnable notebook
+reports/KAT_ICL_Report.md         full write-up
+KAT_ICL.ipynb                     single runnable notebook (Steps 1–5)
 data/transfer_cube/DATA_MANIFEST.md   dataset & split contract
 requirements-kat.txt              unified deps (ACT sim + KAT-ICL)
 ```
 
 ---
 
-## Seen vs. unseen (P5 Step 5 requirement)
+## Seen vs. unseen (Step 5 requirement)
 
 * `subsets/demos_{5,10,20}` hold episodes **0..N-1** of the seed-0 run — used as in-context demonstrations.
 * `subsets/test_5` holds episodes **20..24** — **never present** in any demo folder.
@@ -144,31 +139,12 @@ requirements-kat.txt              unified deps (ACT sim + KAT-ICL)
 
 | Ablation | Values | Holds fixed |
 |----------|--------|-------------|
-| #demos | demos_5 / demos_10 / demos_20 | K=10, M=20, model=gemma4:26b, unseen |
+| #demos | demos_5 (main) / demos_10 / demos_20 | K=10, M=20, model=gemma4:26b, unseen |
 | K keypoints | 5 / 10 / 20 | demos_5, M=20, model=gemma4:26b, unseen |
 | M action tokens | 10 / 20 / 40 | demos_5, K=10, model=gemma4:26b, unseen |
 | LLM | `gemma4:26b` vs `llama3.2:latest` | demos_5, K=10, M=20, unseen |
 
 ---
-
-## Original ACT (training, evaluation)
-
-`imitate_episodes.py` and friends are untouched and still work as in the upstream repo:
-
-```bash
-# Train ACT on transfer cube
-python3 imitate_episodes.py \
-  --task_name sim_transfer_cube_scripted \
-  --ckpt_dir <ckpt dir> \
-  --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 \
-  --batch_size 8 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0
-
-# Evaluate (same command + --eval)
-python3 imitate_episodes.py --task_name sim_transfer_cube_scripted \
-  --ckpt_dir <ckpt dir> --policy_class ACT --eval
-```
-
-Typical success after full training: ~90% on transfer cube, ~50% on insertion. See [ACT tuning tips](https://docs.google.com/document/d/1FVIZfoALXg_ZkYKaYVh-qOlaXveq5CtvJHXkY25eYhs/edit?usp=sharing).
 
 ### ACT base files
 - `imitate_episodes.py` — train + evaluate ACT

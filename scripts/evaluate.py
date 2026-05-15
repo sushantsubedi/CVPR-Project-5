@@ -1,4 +1,4 @@
-"""P5 Step 5 — KAT-ICL evaluation, ablations, and aggregation in one script.
+"""KAT-ICL evaluation, ablations, and aggregation in one script.
 
 Modes
 -----
@@ -8,7 +8,7 @@ Single run (one (demos, tests, K, M) configuration):
       --tests_dir data/transfer_cube/subsets/test_5 \
       --eval_split both --K 10 --M 20
 
-Full P5 sweep (seen/unseen on demos_20 + n_demos / K / M / model ablations + aggregate):
+Full sweep (seen/unseen on demos_5 + n_demos / K / M / model ablations + aggregate):
   python3 scripts/evaluate.py sweep
       [--collection_seed 0] [--model gemma4:26b]
       [--models 'gemma4:26b,llama3.2:latest'] [--max_tests 5]
@@ -251,7 +251,7 @@ def _add_run_args(ap: argparse.ArgumentParser) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Full P5 sweep
+# Full sweep (Step 5)
 # ---------------------------------------------------------------------------
 
 _SUB = ROOT / "data" / "transfer_cube" / "subsets"
@@ -286,18 +286,20 @@ def _sweep_one(
 
 
 def run_sweep(args: argparse.Namespace) -> None:
-    """Run the full P5 Step 5 sweep then aggregate."""
+    """Run the full evaluation sweep (Step 5) then aggregate."""
     tests = str(_SUB / "test_5")
 
-    # (a) seen + unseen on demos_20 with K=10, M=20 — main result
+    # (a) seen + unseen on demos_5 with K=10, M=20 — main result
     _sweep_one(
-        demos_dir=str(_SUB / "demos_20"), tests_dir=tests,
-        eval_split="both", out_csv="artifacts/results_p5_main_seen_unseen.csv",
+        demos_dir=str(_SUB / "demos_5"), tests_dir=tests,
+        eval_split="both", out_csv="artifacts/results_main_seen_unseen.csv",
         args=args,
     )
 
-    # (b) #demos ablation (unseen only, K=10, M=20)
-    for n, folder in [(5, "demos_5"), (10, "demos_10"), (20, "demos_20")]:
+    # (b) #demos ablation (unseen only, K=10, M=20).
+    # demos_5 is the main config (covered by (a) on the unseen rows), so the
+    # ablation only sweeps the additional 10 / 20 configurations here.
+    for n, folder in [(10, "demos_10"), (20, "demos_20")]:
         _sweep_one(
             demos_dir=str(_SUB / folder), tests_dir=tests,
             eval_split="unseen", out_csv=f"artifacts/results_ablation_ndemos_{n}_unseen.csv",
@@ -331,8 +333,8 @@ def run_sweep(args: argparse.Namespace) -> None:
 
     aggregate(argparse.Namespace(
         glob="artifacts/results_*.csv",
-        out_json="artifacts/p5_step5_summary.json",
-        out_md="artifacts/p5_step5_tables.md",
+        out_json="artifacts/evaluation_summary.json",
+        out_md="artifacts/evaluation_tables.md",
     ))
 
 
@@ -444,8 +446,8 @@ def main() -> None:
 
     ap_agg = sub.add_parser("aggregate", help="Aggregate result CSVs into summary tables")
     ap_agg.add_argument("--glob", default="artifacts/results_*.csv")
-    ap_agg.add_argument("--out_json", default="artifacts/p5_step5_summary.json")
-    ap_agg.add_argument("--out_md", default="artifacts/p5_step5_tables.md")
+    ap_agg.add_argument("--out_json", default="artifacts/evaluation_summary.json")
+    ap_agg.add_argument("--out_md", default="artifacts/evaluation_tables.md")
 
     args = top.parse_args()
     if args.cmd == "run":

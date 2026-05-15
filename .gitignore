@@ -16,7 +16,6 @@ fuse.cfg
 # Generation results
 results/
 data/
-artifacts/
 assets/weights/*.pth
 ray/auth.json
 
