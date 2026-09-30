@@ -1,12 +1,5 @@
 # ACT + KAT-style In-Context Imitation (Transfer Cube)
 
-This repo combines:
-
-1. **ACT** (Action Chunking with Transformers) — the original sim + training code, unchanged.
-2. **KAT-ICL pipeline** — added on top, applied to the **Transfer Cube** task only.
-
-> Pipeline: top RGB-D → DINO anchored keypoints (`KP i x y d`) + quantized 14-D waypoints (`WP[i] L LG R RG`) → Ollama few-shot ICL with JSON schema → decode + MuJoCo replay → success/reward CSV.
->
 
 ---
 
